@@ -1,5 +1,6 @@
 type Query {
   placeholder: String
+  users: [User]
 }
 
 type Time {
@@ -8,5 +9,24 @@ type Time {
 }
 
 type Subscription {
+  userUpdated: User!
   currentTime: Time!
+}
+
+type User {
+  id: ID!
+  name: String!
+  friends: [User]
+}
+
+# define User input
+input UserInput {
+  id: ID
+  name: String!
+  friends: [UserInput]
+}
+
+type Mutation {
+  upsertUser(input: UserInput!): User!
+  addFriend(userId: ID!, friendId: ID!): User!
 }

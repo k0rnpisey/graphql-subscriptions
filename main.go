@@ -5,8 +5,8 @@ import (
 	"errors"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/gorilla/websocket"
-	"github.com/rs/cors"
 	"gqlgen-subscriptions/graph"
+	"gqlgen-subscriptions/graph/model"
 	"net/http"
 	"os"
 	"time"
@@ -30,13 +30,16 @@ func main() {
 
 	// Add CORS middleware around every request
 	// See https://github.com/rs/cors for full option listing
-	router.Use(cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:9999/"},
-		AllowCredentials: true,
-		Debug:            true,
-	}).Handler)
+	//router.Use(cors.New(cors.Options{
+	//	AllowedOrigins:   []string{"http://localhost:8080/"},
+	//	AllowCredentials: true,
+	//	Debug:            true,
+	//}).Handler)
 
-	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
+	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
+		UserStore:        make(map[string]*model.User),
+		UserUpdateEvents: make(chan *model.User, 10),
+	}}))
 	srv.AddTransport(transport.POST{})
 	srv.AddTransport(transport.Websocket{
 		KeepAlivePingInterval: 10 * time.Second,

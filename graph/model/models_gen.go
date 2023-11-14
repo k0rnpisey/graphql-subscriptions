@@ -6,3 +6,15 @@ type Time struct {
 	UnixTime  int    `json:"unixTime"`
 	TimeStamp string `json:"timeStamp"`
 }
+
+type User struct {
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Friends []*User `json:"friends,omitempty"`
+}
+
+type UserInput struct {
+	ID      *string      `json:"id,omitempty"`
+	Name    string       `json:"name"`
+	Friends []*UserInput `json:"friends,omitempty"`
+}
