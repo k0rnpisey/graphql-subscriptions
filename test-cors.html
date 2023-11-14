@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test Client</title>
+    <script>
+        // Function to perform a GraphQL query
+        function performGraphQLQuery() {
+            // Replace with your GraphQL server URL
+            const graphqlServerUrl = 'http://localhost:8080/query';
+
+            // Example GraphQL query
+            const query = `
+                query {
+                    placeholder
+                }
+            `;
+
+            // Fetch options including method, headers, and body
+            const fetchOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ query }),
+                mode: 'cors' // This mode allows sending cross-origin requests
+            };
+
+            // Make the request to the GraphQL server
+            fetch(graphqlServerUrl, fetchOptions)
+                .then(response => response.json())
+                .then(data => console.log('Data from GraphQL:', data))
+                .catch(error => console.error('Error fetching data:', error));
+        }
+    </script>
+</head>
+<body>
+<h1>CORS Test Client</h1>
+<button onclick="performGraphQLQuery()">Perform GraphQL Query</button>
+</body>
+</html>
