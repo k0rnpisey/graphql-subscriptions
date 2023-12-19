@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"gqlgen-subscriptions/graph/model"
 	"strconv"
-	"time"
 )
 
 // UpsertUser is the resolver for the upsertUser field.
@@ -32,35 +31,59 @@ func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput
 		user.Name = input.Name
 		r.Resolver.UserStore[nid] = &user
 	}
-	r.Resolver.UserUpdateEvents <- &user
 	return &user, nil
 }
 
-// AddFriend is the resolver for the addFriend field.
-func (r *mutationResolver) AddFriend(ctx context.Context, userID string, friendID string) (*model.User, error) {
-	// Find the user and friend in the data store.
+// FollowUser is the resolver for the followUser field.
+func (r *mutationResolver) FollowUser(ctx context.Context, userID string, followingUserID string) (*model.User, error) {
+	// Find the user and following in the data store.
 	user, userOk := r.UserStore[userID]
-	friend, friendOk := r.UserStore[friendID]
+	following, followingOk := r.UserStore[followingUserID]
 
-	// If the user or friend was not found, return an error.
+	// If the user or following was not found, return an error.
 	if !userOk {
 		return nil, fmt.Errorf("user with ID %s not found", userID)
 	}
-	if !friendOk {
-		return nil, fmt.Errorf("friend with ID %s not found", friendID)
+	if !followingOk {
+		return nil, fmt.Errorf("following with ID %s not found", followingUserID)
 	}
 
-	// Add the friend to the user's list of friends.
-	user.Friends = append(user.Friends, friend)
+	// Add the following to the user's list of friends.
+	user.Following = append(user.Following, following)
 
 	// Update the user in the data store.
 	r.UserStore[userID] = user
 
-	// Send an update to all subscribers.
-	r.UserUpdateEvents <- user
+	listener := r.NotificationSubscription[followingUserID]
+	notification := model.Notification{
+		ID:      strconv.Itoa(len(r.NotificationStore) + 1),
+		Type:    model.NotificationTypeFollower,
+		Message: fmt.Sprintf("%s is now following you", user.Name),
+	}
+	// append to the notification store for the user
+	r.NotificationStore[followingUserID] = append(r.NotificationStore[followingUserID], &notification)
+	//r.NotificationStore[followingUserID] = &notification
 
+	if listener != nil {
+		listener <- &notification
+	}
 	// Return the updated user.
 	return user, nil
+}
+
+// CreatePost is the resolver for the createPost field.
+func (r *mutationResolver) CreatePost(ctx context.Context, input model.PostInput) (*model.Post, error) {
+	panic(fmt.Errorf("not implemented: CreatePost - createPost"))
+}
+
+// UpdatePost is the resolver for the updatePost field.
+func (r *mutationResolver) UpdatePost(ctx context.Context, input model.PostInput) (*model.Post, error) {
+	panic(fmt.Errorf("not implemented: UpdatePost - updatePost"))
+}
+
+// DeletePost is the resolver for the deletePost field.
+func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: DeletePost - deletePost"))
 }
 
 // Placeholder is the resolver for the placeholder field.
@@ -83,65 +106,62 @@ func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	return []*model.User{}, nil
 }
 
-// UserUpdated is the resolver for the userUpdated field.
-func (r *subscriptionResolver) UserUpdated(ctx context.Context) (<-chan *model.User, error) {
-	// Create a channel that will be used to send updates to the client.
-	updates := make(chan *model.User)
+// User is the resolver for the user field.
+func (r *queryResolver) User(ctx context.Context, email string, password string) (*model.User, error) {
+	if len(r.Resolver.UserStore) > 0 {
+		// eager load all users and their friends (if any) from the data store and return them.
+		for idx := range r.Resolver.UserStore {
+			user := r.Resolver.UserStore[idx]
+			if user.Name == email {
+				return user, nil
+			}
+		}
+	}
+	return nil, nil
+}
 
-	// This goroutine will run in the background, listening for changes to users.
-	// In a real-world application, you would have some event system to hook into.
+// UserNotifications is the resolver for the userNotifications field.
+func (r *queryResolver) UserNotifications(ctx context.Context, userID string) ([]*model.Notification, error) {
+	store := r.Resolver.NotificationStore[userID]
+	if store != nil {
+		return store, nil
+	}
+	return []*model.Notification{}, nil
+}
+
+// Notifications is the resolver for the notifications field.
+func (r *queryResolver) Notifications(ctx context.Context) ([]*model.Notification, error) {
+	if len(r.Resolver.NotificationStore) > 0 {
+		notifications := make([]*model.Notification, 0)
+		// eager load all users and their friends (if any) from the data store and return them.
+		for idx := range r.Resolver.NotificationStore {
+			notification := r.Resolver.NotificationStore[idx]
+			notifications = append(notifications, notification...)
+		}
+		return notifications, nil
+	}
+	return []*model.Notification{}, nil
+}
+
+// Notification is the resolver for the notification field.
+func (r *subscriptionResolver) Notification(ctx context.Context, userID string) (<-chan *model.Notification, error) {
+	updates := make(chan *model.Notification, 10) // FIXME: 10 is arbitrary
+	c := make(chan *model.Notification, 10)
+	r.Resolver.NotificationSubscription[userID] = c
 	go func() {
 		defer close(updates)
-
-		// Here you would subscribe to the event system or changes in the data store.
-		// For demonstration purposes, let's assume there's a channel or method on the resolver
-		// that gets notified of changes, and we'll range over it.
 		for {
 			select {
 			case <-ctx.Done():
 				// If the client disconnects, stop the goroutine.
 				return
-			case userUpdateEvent := <-r.Resolver.UserUpdateEvents:
+			case followerEvent := <-c:
 				// We received a user update event. Send the update to the client.
-				updates <- userUpdateEvent
+				updates <- followerEvent
 			}
 		}
 	}()
-
 	return updates, nil
-}
-
-// CurrentTime is the resolver for the currentTime field.
-func (r *subscriptionResolver) CurrentTime(ctx context.Context) (<-chan *model.Time, error) {
-	ch := make(chan *model.Time)
-
-	go func() {
-		defer close(ch)
-
-		for {
-			time.Sleep(1 * time.Second)
-			fmt.Println("Tick")
-
-			currentTime := time.Now()
-
-			t := &model.Time{
-				UnixTime:  int(currentTime.Unix()),
-				TimeStamp: currentTime.Format(time.RFC3339),
-			}
-
-			select {
-			case <-ctx.Done():
-				// Exit on cancellation
-				fmt.Println("Subscription closed.")
-				return
-
-			case ch <- t:
-				// Our message went through, do nothing
-			}
-
-		}
-	}()
-	return ch, nil
 }
 
 // Mutation returns MutationResolver implementation.
