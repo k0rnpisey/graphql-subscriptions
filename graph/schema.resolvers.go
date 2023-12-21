@@ -72,18 +72,47 @@ func (r *mutationResolver) FollowUser(ctx context.Context, userID string, follow
 }
 
 // CreatePost is the resolver for the createPost field.
-func (r *mutationResolver) CreatePost(ctx context.Context, input model.PostInput) (*model.Post, error) {
-	panic(fmt.Errorf("not implemented: CreatePost - createPost"))
+func (r *mutationResolver) CreatePost(ctx context.Context, input model.CreatePostInput) (*model.Post, error) {
+	// find the user by id
+	//user, _ := r.UserStore[input.AuthorID]
+	//if !ok {
+	//	return nil, fmt.Errorf("user with ID %s not found", input.AuthorID)
+	//}
+	post := model.Post{
+		ID:      strconv.Itoa(len(r.PostStore) + 1),
+		Title:   input.Title,
+		Content: input.Content,
+		Author:  &model.User{},
+	}
+	r.PostStore = append(r.PostStore, &post)
+	return &post, nil
 }
 
 // UpdatePost is the resolver for the updatePost field.
-func (r *mutationResolver) UpdatePost(ctx context.Context, input model.PostInput) (*model.Post, error) {
-	panic(fmt.Errorf("not implemented: UpdatePost - updatePost"))
+func (r *mutationResolver) UpdatePost(ctx context.Context, input model.UpdatePostInput) (*model.Post, error) {
+	// find the post by id from PostStore, PostStore is a slice
+	for idx := range r.PostStore {
+		post := r.PostStore[idx]
+		if post.ID == input.ID {
+			post.Title = input.Title
+			post.Content = input.Content
+			return post, nil
+		}
+	}
+	return nil, fmt.Errorf("post with ID %s not found", input.ID)
 }
 
 // DeletePost is the resolver for the deletePost field.
 func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, error) {
-	panic(fmt.Errorf("not implemented: DeletePost - deletePost"))
+	// delete the post by id from PostStore, PostStore is a slice
+	for idx := range r.PostStore {
+		post := r.PostStore[idx]
+		if post.ID == id {
+			r.PostStore = append(r.PostStore[:idx], r.PostStore[idx+1:]...)
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("post with ID %s not found", id)
 }
 
 // Placeholder is the resolver for the placeholder field.
@@ -141,6 +170,14 @@ func (r *queryResolver) Notifications(ctx context.Context) ([]*model.Notificatio
 		return notifications, nil
 	}
 	return []*model.Notification{}, nil
+}
+
+// Posts is the resolver for the posts field.
+func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
+	if len(r.Resolver.PostStore) > 0 {
+		return r.PostStore, nil
+	}
+	return nil, nil
 }
 
 // Notification is the resolver for the notification field.

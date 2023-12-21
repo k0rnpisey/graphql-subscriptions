@@ -1,62 +1,70 @@
 type Query {
-  placeholder: String
-  users: [User]
-  user(email: String!, password: String!): User
-  userNotifications(userId: ID!): [Notification]
-  notifications: [Notification]
+    placeholder: String
+    users: [User]
+    user(email: String!, password: String!): User
+    userNotifications(userId: ID!): [Notification]
+    notifications: [Notification]
+    posts: [Post]
 }
 
 enum NotificationType {
-  FOLLOWER
+    FOLLOWER
 }
 
 type Notification {
-  id: ID!
-  type: NotificationType!
-  message: String!
+    id: ID!
+    type: NotificationType!
+    message: String!
 }
 
 type Subscription {
-  notification(userId: ID!): Notification!
+    notification(userId: ID!): Notification!
 }
 
 type User {
-  id: ID!
-  name: String!
-  email: String!
-  password: String!
+    id: ID!
+    name: String!
+    email: String!
+    password: String!
 
-  following: [User]
-  followers: [User]
+    following: [User]
+    followers: [User]
 }
 
 # define User input
 input UserInput {
-  id: ID
-  name: String!
-  email: String!
-  password: String!
+    id: ID
+    name: String!
+    email: String!
+    password: String!
 }
 
 type Mutation {
-  upsertUser(input: UserInput!): User!
-  followUser(userId: ID!, followingUserId: ID!): User!
+    upsertUser(input: UserInput!): User!
+    followUser(userId: ID!, followingUserId: ID!): User!
 
-  createPost(input: PostInput!): Post!
-  updatePost(input: PostInput!): Post!
-  deletePost(id: ID!): Boolean!
+    createPost(input: CreatePostInput!): Post!
+    updatePost(input: UpdatePostInput!): Post!
+    deletePost(id: ID!): Boolean!
 }
 
 type Post {
-  id: ID!
-  title: String!
-  content: String!
-  author: User!
+    id: ID!
+    title: String!
+    content: String!
+    author: User!
 }
 
-input PostInput {
-  id: ID
-  title: String!
-  content: String!
-  authorId: ID!
+input CreatePostInput {
+    id: ID
+    title: String!
+    content: String!
+    authorId: ID!
+}
+
+input UpdatePostInput {
+    id: ID!
+    title: String!
+    content: String!
+    authorId: ID!
 }

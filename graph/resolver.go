@@ -8,6 +8,7 @@ import "gqlgen-subscriptions/graph/model"
 
 type Resolver struct {
 	UserStore                map[string]*model.User
+	PostStore                []*model.Post
 	NotificationStore        map[string][]*model.Notification
 	NotificationSubscription map[string]chan *model.Notification
 }
