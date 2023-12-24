@@ -5,6 +5,7 @@ type Query {
     userNotifications(userId: ID!): [Notification]
     notifications: [Notification]
     posts: [Post]
+    post(id: ID!): Post
 }
 
 enum NotificationType {

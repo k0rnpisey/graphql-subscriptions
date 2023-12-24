@@ -180,6 +180,18 @@ func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
 	return nil, nil
 }
 
+// Post is the resolver for the post field.
+func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error) {
+	// find the post by id from PostStore, PostStore is a slice
+	for idx := range r.PostStore {
+		post := r.PostStore[idx]
+		if post.ID == id {
+			return post, nil
+		}
+	}
+	return nil, fmt.Errorf("post with ID %s not found", id)
+}
+
 // Notification is the resolver for the notification field.
 func (r *subscriptionResolver) Notification(ctx context.Context, userID string) (<-chan *model.Notification, error) {
 	updates := make(chan *model.Notification, 10) // FIXME: 10 is arbitrary
