@@ -8,6 +8,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/edgedb/edgedb-go"
 	"github.com/go-chi/chi"
 	"github.com/gorilla/websocket"
 	"github.com/rs/cors"
@@ -33,15 +34,21 @@ func main() {
 	// allow all origins
 	router.Use(cors.AllowAll().Handler)
 
-	// Add CORS middleware around every request
-	// See https://github.com/rs/cors for full option listing
-	//router.Use(cors.New(cors.Options{
-	//	AllowedOrigins:   []string{"http://localhost:5173/"},
-	//	AllowCredentials: true,
-	//	Debug:            true,
-	//}).Handler)
+	// Establish a connection to the EdgeDB instance.
+	opts := edgedb.Options{
+		Database:    "edgedb",
+		User:        "edgedb",
+		Concurrency: 4,
+	}
+	client, err := edgedb.CreateClient(context.Background(), opts)
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+		return
+	}
+	defer client.Close()
 
 	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
+		Db:                       client,
 		UserStore:                make(map[string]*model.User),
 		PostStore:                make([]*model.Post, 0),
 		NotificationStore:        make(map[string][]*model.Notification),
