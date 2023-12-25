@@ -3,11 +3,12 @@ package model
 import "github.com/edgedb/edgedb-go"
 
 type User struct {
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	Following []User `json:"following"`
-	Followers []User `json:"followers"`
+	Id        edgedb.UUID `edgedb:"id"`
+	Name      string      `edgedb:"name"`
+	Email     string      `edgedb:"email"`
+	Password  string      `edgedb:"password"`
+	Following []User      `json:"following"`
+	Followers []User      `json:"followers"`
 }
 
 type Post struct {

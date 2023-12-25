@@ -15,25 +15,38 @@ import (
 
 // UpsertUser is the resolver for the upsertUser field.
 func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput) (*model.User, error) {
-	var user model.User
-	n := len(r.Resolver.UserStore)
-	id := input.ID
-
-	if id != nil {
-		u, ok := r.Resolver.UserStore[*id]
-		if !ok {
-			return nil, fmt.Errorf("not found")
+	var user edgedbmodel.User
+	query := `SELECT User { id, name, email, password } FILTER .email = <str>$0`
+	err := r.Db.QuerySingle(ctx, query, &user, input.Email)
+	if err != nil {
+		if err.Error() == "edgedb.NoDataError: zero results" {
+			var inserted struct {
+				id edgedb.UUID
+			}
+			query = fmt.Sprintf(`
+	INSERT User {
+		name := '%s',
+		email := '%s',
+		password := '%s'
+}`, input.Name, input.Email, input.Password)
+			err = r.Db.QuerySingle(ctx, query, &inserted)
+			if err != nil {
+				return nil, err
+			}
+			return &model.User{
+				ID:       inserted.id.String(),
+				Name:     input.Name,
+				Email:    input.Email,
+				Password: input.Password,
+			}, nil
 		}
-		u.Name = input.Name
-		user = *u
-	} else {
-		// generate unique id
-		nid := strconv.Itoa(n + 1)
-		user.ID = nid
-		user.Name = input.Name
-		r.Resolver.UserStore[nid] = &user
 	}
-	return &user, nil
+	return &model.User{
+		ID:       user.Id.String(),
+		Name:     user.Name,
+		Email:    user.Email,
+		Password: user.Password,
+	}, nil
 }
 
 // FollowUser is the resolver for the followUser field.
@@ -150,16 +163,18 @@ func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 
 // User is the resolver for the user field.
 func (r *queryResolver) User(ctx context.Context, email string, password string) (*model.User, error) {
-	if len(r.Resolver.UserStore) > 0 {
-		// eager load all users and their friends (if any) from the data store and return them.
-		for idx := range r.Resolver.UserStore {
-			user := r.Resolver.UserStore[idx]
-			if user.Name == email {
-				return user, nil
-			}
-		}
+	var user edgedbmodel.User
+	query := `SELECT User { id, name, email, password } FILTER .email = <str>$0 AND .password = <str>$1`
+	err := r.Db.QuerySingle(ctx, query, &user, email, password)
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	return &model.User{
+		ID:       user.Id.String(),
+		Name:     user.Name,
+		Email:    user.Email,
+		Password: user.Password,
+	}, nil
 }
 
 // UserNotifications is the resolver for the userNotifications field.
