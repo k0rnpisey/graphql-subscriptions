@@ -7,6 +7,8 @@ package graph
 import (
 	"context"
 	"fmt"
+	"github.com/edgedb/edgedb-go"
+	edgedbmodel "gqlgen-subscriptions/dbschema/model"
 	"gqlgen-subscriptions/graph/model"
 	"strconv"
 )
@@ -73,46 +75,57 @@ func (r *mutationResolver) FollowUser(ctx context.Context, userID string, follow
 
 // CreatePost is the resolver for the createPost field.
 func (r *mutationResolver) CreatePost(ctx context.Context, input model.CreatePostInput) (*model.Post, error) {
-	// find the user by id
-	//user, _ := r.UserStore[input.AuthorID]
-	//if !ok {
-	//	return nil, fmt.Errorf("user with ID %s not found", input.AuthorID)
-	//}
-	post := model.Post{
-		ID:      strconv.Itoa(len(r.PostStore) + 1),
+	var inserted struct{ id edgedb.UUID }
+	query := fmt.Sprintf(`
+    INSERT Post {
+        title := '%s',
+        content := '%s'
+    }
+`, input.Title, input.Content)
+	err := r.Db.QuerySingle(ctx, query, &inserted)
+	if err != nil {
+		return nil, err
+	}
+	return &model.Post{
+		ID:      inserted.id.String(),
 		Title:   input.Title,
 		Content: input.Content,
-		Author:  &model.User{},
-	}
-	r.PostStore = append(r.PostStore, &post)
-	return &post, nil
+	}, nil
 }
 
 // UpdatePost is the resolver for the updatePost field.
 func (r *mutationResolver) UpdatePost(ctx context.Context, input model.UpdatePostInput) (*model.Post, error) {
-	// find the post by id from PostStore, PostStore is a slice
-	for idx := range r.PostStore {
-		post := r.PostStore[idx]
-		if post.ID == input.ID {
-			post.Title = input.Title
-			post.Content = input.Content
-			return post, nil
-		}
+	var post edgedbmodel.Post
+	query := `SELECT Post { id, title, content } FILTER .id = <uuid>$0`
+	uuid, _ := edgedb.ParseUUID(input.ID)
+	err := r.Db.QuerySingle(ctx, query, &post, uuid)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("post with ID %s not found", input.ID)
+	post.Title = input.Title
+	post.Content = input.Content
+	query = `UPDATE Post filter .id = <uuid>$0 SET { title := <str>$1, content := <str>$2 };`
+	err = r.Db.Execute(ctx, query, uuid, input.Title, input.Content)
+	if err != nil {
+		return nil, err
+	}
+	return &model.Post{
+		ID:      post.Id.String(),
+		Title:   post.Title,
+		Content: post.Content,
+		Author:  &model.User{},
+	}, nil
 }
 
 // DeletePost is the resolver for the deletePost field.
 func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, error) {
-	// delete the post by id from PostStore, PostStore is a slice
-	for idx := range r.PostStore {
-		post := r.PostStore[idx]
-		if post.ID == id {
-			r.PostStore = append(r.PostStore[:idx], r.PostStore[idx+1:]...)
-			return true, nil
-		}
+	query := `DELETE Post FILTER .id = <uuid>$0;`
+	uuid, _ := edgedb.ParseUUID(id)
+	err := r.Db.Execute(ctx, query, uuid)
+	if err != nil {
+		return false, err
 	}
-	return false, fmt.Errorf("post with ID %s not found", id)
+	return true, nil
 }
 
 // Placeholder is the resolver for the placeholder field.
@@ -174,22 +187,40 @@ func (r *queryResolver) Notifications(ctx context.Context) ([]*model.Notificatio
 
 // Posts is the resolver for the posts field.
 func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
-	if len(r.Resolver.PostStore) > 0 {
-		return r.PostStore, nil
+	var posts []edgedbmodel.Post
+	query := `SELECT Post { id, title, content }`
+	err := r.Db.Query(ctx, query, &posts)
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	var out []*model.Post
+	for _, post := range posts {
+		o := model.Post{
+			ID:      post.Id.String(),
+			Title:   post.Title,
+			Content: post.Content,
+			Author:  &model.User{},
+		}
+		out = append(out, &o)
+	}
+	return out, nil
 }
 
 // Post is the resolver for the post field.
 func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error) {
-	// find the post by id from PostStore, PostStore is a slice
-	for idx := range r.PostStore {
-		post := r.PostStore[idx]
-		if post.ID == id {
-			return post, nil
-		}
+	var post edgedbmodel.Post
+	query := `SELECT Post { id, title, content } FILTER .id = <uuid>$0`
+	uuid, _ := edgedb.ParseUUID(id)
+	err := r.Db.QuerySingle(ctx, query, &post, uuid)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("post with ID %s not found", id)
+	return &model.Post{
+		ID:      post.Id.String(),
+		Title:   post.Title,
+		Content: post.Content,
+		Author:  &model.User{},
+	}, nil
 }
 
 // Notification is the resolver for the notification field.

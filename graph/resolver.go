@@ -13,7 +13,6 @@ type Resolver struct {
 	Db *edgedb.Client
 
 	UserStore                map[string]*model.User
-	PostStore                []*model.Post
 	NotificationStore        map[string][]*model.Notification
 	NotificationSubscription map[string]chan *model.Notification
 }
