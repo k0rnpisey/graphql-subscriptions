@@ -1,5 +1,4 @@
 type Query {
-    placeholder: String
     users: [User]
     user(email: String!, password: String!): User
     userNotifications(userId: ID!): [Notification]

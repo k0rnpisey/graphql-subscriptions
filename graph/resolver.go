@@ -10,9 +10,6 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require here.
 
 type Resolver struct {
-	Db *edgedb.Client
-
-	UserStore                map[string]*model.User
-	NotificationStore        map[string][]*model.Notification
+	Db                       *edgedb.Client
 	NotificationSubscription map[string]chan *model.Notification
 }

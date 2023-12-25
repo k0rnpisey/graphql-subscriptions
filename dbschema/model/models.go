@@ -7,8 +7,8 @@ type User struct {
 	Name      string      `edgedb:"name"`
 	Email     string      `edgedb:"email"`
 	Password  string      `edgedb:"password"`
-	Following []User      `json:"following"`
-	Followers []User      `json:"followers"`
+	Following []User      `edgedb:"following"`
+	Followers []User      `edgedb:"followers"`
 }
 
 type Post struct {
@@ -19,12 +19,7 @@ type Post struct {
 }
 
 type Notification struct {
-	Type    NotificationType `json:"type"`
-	Message string           `json:"message"`
+	Id      edgedb.UUID `edgedb:"id"`
+	Type    string      `edgedb:"type"`
+	Message string      `edgedb:"message"`
 }
-
-type NotificationType string
-
-const (
-	FOLLOWER NotificationType = "FOLLOWER"
-)

@@ -10,7 +10,6 @@ import (
 	"github.com/edgedb/edgedb-go"
 	edgedbmodel "gqlgen-subscriptions/dbschema/model"
 	"gqlgen-subscriptions/graph/model"
-	"strconv"
 )
 
 // UpsertUser is the resolver for the upsertUser field.
@@ -51,39 +50,63 @@ func (r *mutationResolver) UpsertUser(ctx context.Context, input model.UserInput
 
 // FollowUser is the resolver for the followUser field.
 func (r *mutationResolver) FollowUser(ctx context.Context, userID string, followingUserID string) (*model.User, error) {
-	// Find the user and following in the data store.
-	user, userOk := r.UserStore[userID]
-	following, followingOk := r.UserStore[followingUserID]
-
-	// If the user or following was not found, return an error.
-	if !userOk {
-		return nil, fmt.Errorf("user with ID %s not found", userID)
+	var user edgedbmodel.User
+	query := `SELECT User { id, name, email, password } FILTER .id = <uuid>$0`
+	uuid, _ := edgedb.ParseUUID(userID)
+	err := r.Db.QuerySingle(ctx, query, &user, uuid)
+	if err != nil {
+		return nil, err
 	}
-	if !followingOk {
-		return nil, fmt.Errorf("following with ID %s not found", followingUserID)
+	var following edgedbmodel.User
+	query = `SELECT User { id, name, email, password } FILTER .id = <uuid>$0`
+	uuid, _ = edgedb.ParseUUID(followingUserID)
+	err = r.Db.QuerySingle(ctx, query, &following, uuid)
+	if err != nil {
+		return nil, err
 	}
 
-	// Add the following to the user's list of friends.
-	user.Following = append(user.Following, following)
+	query = `
+        WITH
+        U := (SELECT default::User FILTER .id = <uuid>$0),
+        F := (SELECT default::User FILTER .id = <uuid>$1)
+        UPDATE default::User
+        FILTER .id = U.id
+        SET {
+            following += F
+        };
+    `
+	err = r.Db.Execute(ctx, query, user.Id, following.Id)
+	if err != nil {
+		return nil, err
+	}
 
-	// Update the user in the data store.
-	r.UserStore[userID] = user
+	// insert notification into the database
+	var inserted struct{ id edgedb.UUID }
+	query = fmt.Sprintf(`
+	INSERT Notification {
+		type := '%s',
+		message := '%s'
+	}`, model.NotificationTypeFollower, fmt.Sprintf("%s is now following you", user.Name))
+	err = r.Db.QuerySingle(ctx, query, &inserted)
+	if err != nil {
+		return nil, err
+	}
 
 	listener := r.NotificationSubscription[followingUserID]
 	notification := model.Notification{
-		ID:      strconv.Itoa(len(r.NotificationStore) + 1),
 		Type:    model.NotificationTypeFollower,
 		Message: fmt.Sprintf("%s is now following you", user.Name),
 	}
-	// append to the notification store for the user
-	r.NotificationStore[followingUserID] = append(r.NotificationStore[followingUserID], &notification)
-	//r.NotificationStore[followingUserID] = &notification
-
 	if listener != nil {
 		listener <- &notification
 	}
-	// Return the updated user.
-	return user, nil
+
+	return &model.User{
+		ID:       user.Id.String(),
+		Name:     user.Name,
+		Email:    user.Email,
+		Password: user.Password,
+	}, nil
 }
 
 // CreatePost is the resolver for the createPost field.
@@ -141,24 +164,25 @@ func (r *mutationResolver) DeletePost(ctx context.Context, id string) (bool, err
 	return true, nil
 }
 
-// Placeholder is the resolver for the placeholder field.
-func (r *queryResolver) Placeholder(ctx context.Context) (*string, error) {
-	str := "Hello World"
-	return &str, nil
-}
-
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
-	if len(r.Resolver.UserStore) > 0 {
-		users := make([]*model.User, 0)
-		// eager load all users and their friends (if any) from the data store and return them.
-		for idx := range r.Resolver.UserStore {
-			user := r.Resolver.UserStore[idx]
-			users = append(users, user)
-		}
-		return users, nil
+	var users []edgedbmodel.User
+	query := `SELECT User { id, name, email, password }`
+	err := r.Db.Query(ctx, query, &users)
+	if err != nil {
+		return nil, err
 	}
-	return []*model.User{}, nil
+	var out []*model.User
+	for _, user := range users {
+		o := model.User{
+			ID:       user.Id.String(),
+			Name:     user.Name,
+			Email:    user.Email,
+			Password: user.Password,
+		}
+		out = append(out, &o)
+	}
+	return out, nil
 }
 
 // User is the resolver for the user field.
@@ -178,26 +202,45 @@ func (r *queryResolver) User(ctx context.Context, email string, password string)
 }
 
 // UserNotifications is the resolver for the userNotifications field.
+// FIXME: this resolver is not working
 func (r *queryResolver) UserNotifications(ctx context.Context, userID string) ([]*model.Notification, error) {
-	store := r.Resolver.NotificationStore[userID]
-	if store != nil {
-		return store, nil
+	var notifications []edgedbmodel.Notification
+	query := `SELECT Notification { id, type, message } FILTER .id = <uuid>$0`
+	uuid, _ := edgedb.ParseUUID(userID)
+	err := r.Db.Query(ctx, query, &notifications, uuid)
+	if err != nil {
+		return nil, err
 	}
-	return []*model.Notification{}, nil
+	var out []*model.Notification
+	for _, notification := range notifications {
+		o := model.Notification{
+			ID:      notification.Id.String(),
+			Type:    model.NotificationType(notification.Type),
+			Message: notification.Message,
+		}
+		out = append(out, &o)
+	}
+	return out, nil
 }
 
 // Notifications is the resolver for the notifications field.
 func (r *queryResolver) Notifications(ctx context.Context) ([]*model.Notification, error) {
-	if len(r.Resolver.NotificationStore) > 0 {
-		notifications := make([]*model.Notification, 0)
-		// eager load all users and their friends (if any) from the data store and return them.
-		for idx := range r.Resolver.NotificationStore {
-			notification := r.Resolver.NotificationStore[idx]
-			notifications = append(notifications, notification...)
-		}
-		return notifications, nil
+	var notifications []edgedbmodel.Notification
+	query := `SELECT Notification { id, type, message }`
+	err := r.Db.Query(ctx, query, &notifications)
+	if err != nil {
+		return nil, err
 	}
-	return []*model.Notification{}, nil
+	var out []*model.Notification
+	for _, notification := range notifications {
+		o := model.Notification{
+			ID:      notification.Id.String(),
+			Type:    model.NotificationType(notification.Type),
+			Message: notification.Message,
+		}
+		out = append(out, &o)
+	}
+	return out, nil
 }
 
 // Posts is the resolver for the posts field.

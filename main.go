@@ -49,8 +49,6 @@ func main() {
 
 	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		Db:                       client,
-		UserStore:                make(map[string]*model.User),
-		NotificationStore:        make(map[string][]*model.Notification),
 		NotificationSubscription: make(map[string]chan *model.Notification),
 	}}))
 
