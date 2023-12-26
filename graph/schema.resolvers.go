@@ -121,6 +121,11 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input model.CreatePos
     }
 `, input.Title, input.Content, input.AuthorID)
 	err := r.Db.QuerySingle(ctx, query, &inserted)
+	// get author
+	var author edgedbmodel.User
+	query = `SELECT User { id, name, email, password } FILTER .id = <uuid>$0`
+	uuid, _ := edgedb.ParseUUID(input.AuthorID)
+	err = r.Db.QuerySingle(ctx, query, &author, uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +133,11 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input model.CreatePos
 		ID:      inserted.id.String(),
 		Title:   input.Title,
 		Content: input.Content,
+		Author: &model.User{
+			ID:    author.Id.String(),
+			Name:  author.Name,
+			Email: author.Email,
+		},
 	}, nil
 }
 
@@ -313,4 +323,36 @@ func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionRes
 
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+
+func (r *queryResolver) Feed(ctx context.Context, userID string) ([]*model.Post, error) {
+	// return all posts from users that the user is following and the user itself
+	var posts []edgedbmodel.Post
+	query := `
+			WITH
+			U := (SELECT default::User FILTER .id = <uuid>$0),
+			SELECT Post { id, title, content, author: {id, name} } FILTER .author IN U.following OR .author = U
+		`
+	uuid, _ := edgedb.ParseUUID(userID)
+	err := r.Db.Query(ctx, query, &posts, uuid)
+	if err != nil {
+		return nil, err
+	}
+	var out []*model.Post
+	for _, post := range posts {
+		o := model.Post{
+			ID:      post.Id.String(),
+			Title:   post.Title,
+			Content: post.Content,
+		}
+		o.Author = &model.User{
+			ID:       post.Author.Id.String(),
+			Name:     post.Author.Name,
+			Email:    post.Author.Email,
+			Password: post.Author.Password,
+		}
+		out = append(out, &o)
+	}
+	return out, nil
+}
+
 type subscriptionResolver struct{ *Resolver }
