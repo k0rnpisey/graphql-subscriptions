@@ -22,4 +22,5 @@ type Notification struct {
 	Id      edgedb.UUID `edgedb:"id"`
 	Type    string      `edgedb:"type"`
 	Message string      `edgedb:"message"`
+	User    User        `edgedb:"user"`
 }

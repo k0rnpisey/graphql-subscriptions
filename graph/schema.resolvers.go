@@ -85,8 +85,9 @@ func (r *mutationResolver) FollowUser(ctx context.Context, userID string, follow
 	query = fmt.Sprintf(`
 	INSERT Notification {
 		type := '%s',
-		message := '%s'
-	}`, model.NotificationTypeFollower, fmt.Sprintf("%s is now following you", user.Name))
+		message := '%s',
+        user := (SELECT User FILTER .id = <uuid>'%s')
+	}`, model.NotificationTypeFollower, fmt.Sprintf("%s is now following you", user.Name), followingUserID)
 	err = r.Db.QuerySingle(ctx, query, &inserted)
 	if err != nil {
 		return nil, err
@@ -115,9 +116,10 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input model.CreatePos
 	query := fmt.Sprintf(`
     INSERT Post {
         title := '%s',
-        content := '%s'
+        content := '%s',
+		author := (SELECT User FILTER .id = <uuid>'%s')
     }
-`, input.Title, input.Content)
+`, input.Title, input.Content, input.AuthorID)
 	err := r.Db.QuerySingle(ctx, query, &inserted)
 	if err != nil {
 		return nil, err
@@ -201,11 +203,9 @@ func (r *queryResolver) User(ctx context.Context, email string, password string)
 	}, nil
 }
 
-// UserNotifications is the resolver for the userNotifications field.
-// FIXME: this resolver is not working
 func (r *queryResolver) UserNotifications(ctx context.Context, userID string) ([]*model.Notification, error) {
 	var notifications []edgedbmodel.Notification
-	query := `SELECT Notification { id, type, message } FILTER .id = <uuid>$0`
+	query := `SELECT Notification { id, type, message, user } FILTER .user.id = <uuid>$0`
 	uuid, _ := edgedb.ParseUUID(userID)
 	err := r.Db.Query(ctx, query, &notifications, uuid)
 	if err != nil {

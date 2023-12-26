@@ -18,6 +18,7 @@ module default {
     type Notification {
         required property type -> NotificationType;
         required property message -> str;
+        required link user -> User;
     }
 
     scalar type NotificationType extending enum<FOLLOWER>;

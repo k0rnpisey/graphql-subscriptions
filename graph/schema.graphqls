@@ -4,6 +4,7 @@ type Query {
     userNotifications(userId: ID!): [Notification]
     notifications: [Notification]
     posts: [Post]
+    feed(userId: ID!): [Post]
     post(id: ID!): Post
 }
 
